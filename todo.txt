@@ -1,0 +1,6 @@
+Get stock names
+Assign sentiment to stocks
+Link setniment to user
+Calculate trust scores for user
+Parse comment threads
+Establish links
