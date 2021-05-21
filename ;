@@ -2,7 +2,6 @@ import re
 import json
 from typing import List
 import nltk
-import yfinance as yf
 
 #final series using trie , handle different data sets
 #visualization techniques
@@ -59,13 +58,7 @@ def fetchData():
 
     hot = reddit.submission(id="n9eiyu")
 
-    myDict = {
-        "Author": [],
-        "Comments": [],
-        "Stocks": [],
-        "Sentiment": [],
-        "TrustScore": []
-    }
+    myDict = {"Author": [], "Comments": [], "Stocks": [], "Sentiment": []}
 
     # hot = subreddit.hot(limit=1)
     # comments = []
@@ -88,27 +81,20 @@ def fetchData():
         # Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})", comment.body)
         Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})?$", comment.body)
         if (len(Stocks) > 0):
-            trust = 0
             myDict["Author"].append(comment.author.name)
             myDict["Comments"].append(comment.body)
             myDict["Stocks"].append(Stocks)
             myDict["Sentiment"].append(
                 sid.polarity_scores(comment.body)["compound"])
-            stockData = yf.Ticker(Stocks[0])
-            data = stockData.info
-            if (len(data) > 1):
-                try:
-                    prevClose = data["previousClose"]
-                    currOpen = data["open"]
-                except Exception as e:
-                    prevClose = 1
-                    currOpen = o
-
+            for stock in Stocks:
+                api.initializeStockData(stock)
+                prevClose = api.getPreviousClose(stock)
+                currOpen = api.getOpen(stock)
                 percentage = ((currOpen - prevClose) / prevClose) * 100
                 trustScore = sid.polarity_scores(
                     comment.body)["compound"] * percentage
                 trust += trustScore
-            myDict["TrustScore"].append(trust)
+            myDict["TrustScore"].appen(trust)
 
     # print(len(comments))
     # print(comments)
