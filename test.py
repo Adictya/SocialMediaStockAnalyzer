@@ -1,5 +1,6 @@
 import re
 import json
+import numpy
 from typing import List
 import nltk
 import yfinance as yf
@@ -38,7 +39,7 @@ def _comments_on_submission(submission: praw.models.Submission,
     print(
         f' *\tParsing comments with replace limit={replace_lim} on post: {submission.title}'
     )
-    submission.comments.replace_more(limit=replace_lim)
+    submission.comments.replace_more(0)
     return submission.comments.list()
 
 
@@ -59,13 +60,7 @@ def fetchData():
 
     hot = reddit.submission(id="n9eiyu")
 
-    myDict = {
-        "Author": [],
-        "Comments": [],
-        "Stocks": [],
-        "Sentiment": [],
-        "TrustScore": []
-    }
+    myDict = {}
 
     # hot = subreddit.hot(limit=1)
     # comments = []
@@ -84,43 +79,68 @@ def fetchData():
     #             sid.polarity_scores(comment.body)["compound"])
     #     # print(comment.body)
 
+    # for comment in _comments_on_submission(hot):
+    #     Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})?$", comment.body)
+    #     print(comment.parent_id)
+
+    id = -1
+    socialNetwork = numpy.zeros((100, 100))
     for comment in _comments_on_submission(hot):
-        # Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})", comment.body)
-        Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})?$", comment.body)
-        if (len(Stocks) > 0):
-            trust = 0
+        stocks = re.findall("[A-Z]{1,5}", comment.body)
+        stockData = ""
+        for stock in stocks:
+            stockData = yf.Ticker(stock).info
+            if len(stockData) > 1:
+                break
+        if (len(stockData) > 1):
             myDict["Author"].append(comment.author.name)
-            myDict["Comments"].append(comment.body)
-            myDict["Stocks"].append(Stocks)
-            myDict["Sentiment"].append(
-                sid.polarity_scores(comment.body)["compound"])
-            stockData = yf.Ticker(Stocks[0])
-            data = stockData.info
-            if (len(data) > 1):
-                try:
-                    prevClose = data["previousClose"]
-                    currOpen = data["open"]
-                except Exception as e:
-                    prevClose = 1
-                    currOpen = o
-
-                percentage = ((currOpen - prevClose) / prevClose) * 100
-                trustScore = sid.polarity_scores(
-                    comment.body)["compound"] * percentage
-                trust += trustScore
-            myDict["TrustScore"].append(trust)
-
-    # print(len(comments))
-    # print(comments)
-    df = pd.DataFrame(myDict)
-    df.to_csv('data.csv')
+            try:
+                prevClose = stockData["previousClose"]
+                currOpen = stockData["open"]
+            except Exception as e:
+                prevClose = 1
+                currOpen = 0
+            percentage = ((currOpen - prevClose) / prevClose) * 100
+            trustScore = sid.polarity_scores(
+                comment.body)["compound"] * percentage
+            if (comment.author.name not in myDict.keys()):
+                id = id + 1
+                myDict[comment.author.name] = id
+                parent_id = id
+            else:
+                parent_id = myDict[comment.author.name]
+            comment.replies.replace_more(0)
+            replyList = comment.replies.list()
+            for reply in replyList:
+                sentiment = sid.polarity_scores(reply.body)["compound"]
+                if (reply.author.name not in myDict.keys()):
+                    id = id + 1
+                    myDict[reply.author.name] = id
+                    socialNetwork[parent_id][id] += sentiment * trustScore
+                    print(parent_id, id)
+                else:
+                    childId = myDict[reply.author.name]
+                    socialNetwork[parent_id][childId] += sentiment * trustScore
+                    print(parent_id, id)
 
 
 def main():
     fetchData()
-    df = pd.read_csv("data.csv")
-    df.head()
-    print(df)
+    # userName1 = "I am investing in FUCK TSLA"
+    # stocks = re.findall("[A-Z]{1,5}", userName1)
+    # stockData = ""
+    # for stock in stocks:
+    #     stockData = yf.Ticker(stock).info
+    #     if len(stockData) > 1:
+    #         break
+    # userName1 = userName1.split("_")
+    # print(stockData)
+
+    # myDict = {}
+    # myDict["gay"] = 1
+    # if ("gay1" not in myDict.keys()):
+    #     myDict["gay1"] = 2
+    # print(myDict)
 
 
 if __name__ == '__main__':

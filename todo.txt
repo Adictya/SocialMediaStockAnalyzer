@@ -1,6 +1,9 @@
-Get stock names
-Assign sentiment to stocks
-Link setniment to user
-Calculate trust scores for user
-Parse comment threads
-Establish links
+x 2021-05-22 Get stock namesc
+x 2021-05-22 Assign sentiment to stocks
+x 2021-05-22 Link setniment to user
+x 2021-05-22 Calculate trust scores for user
+x 2021-05-22 Parse comment threads
+x 2021-05-22 Establish links
+Architecture Diagram
+Methodology Adopted
+Result And Discussion
