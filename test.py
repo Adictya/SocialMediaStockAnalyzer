@@ -4,6 +4,9 @@ import numpy
 from typing import List
 import nltk
 import yfinance as yf
+import praw
+import networkx as nx
+import matplotlib.pyplot as plt
 
 #final series using trie , handle different data sets
 #visualization techniques
@@ -44,6 +47,7 @@ def _comments_on_submission(submission: praw.models.Submission,
 
 
 def fetchData():
+    socialNetwork = nx.Graph()
     reddit = _get_instance()
     subreddit = reddit.subreddit('WallStreetBets')
 
@@ -60,28 +64,81 @@ def fetchData():
 
     hot = reddit.submission(id="n9eiyu")
 
-    myDict = {}
+    usernameDict = {}
+    trustDict = {}
+    stockDict = {}
+
+    id = -1
 
     # hot = subreddit.hot(limit=1)
     # comments = []
     # df["comment"] = hot.apply(lambda comment: hot)
 
-    # for submission in hot:
-    #     myDict["Comments"].append(_comments_on_submission(submission))
+    for comment in _comments_on_submission(hot):
+        stocks = re.findall("[A-Z]{1,5}", comment.body)
+        stockData = ""
 
-    # for comment in _comments_on_submission(hot):
-    #     Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})?$", comment.body)
-    #     if (len(Stocks) > 0):
-    #         myDict["Author"].append(comment.author.name)
-    #         myDict["Comments"].append(comment.body)
-    #         myDict["Stocks"].append(Stocks)
-    #         myDict["Sentiment"].append(
-    #             sid.polarity_scores(comment.body)["compound"])
-    #     # print(comment.body)
+        for stock in stocks:
+            if (stock in stockDict.keys()):
+                stockData = stockDict[stock]
+                break
+            stockData = yf.Ticker(stock).info
+            if len(stockData) > 1:
+                stockDict[stock] = stockData
+                break
 
-    # for comment in _comments_on_submission(hot):
-    #     Stocks = re.findall("[A-Z]{1,5}(?:\s*\d{6}[PC]\d{8})?$", comment.body)
-    #     print(comment.parent_id)
+        if (comment.author and len(stockData) > 1):
+            prevClose = stockData["previousClose"]
+            currOpen = stockData["open"]
+
+            percentage = ((currOpen - prevClose) / prevClose) * 100
+            trustScore = sid.polarity_scores(
+                comment.body)["compound"] * percentage
+            userName = comment.author.name
+
+            if (userName not in usernameDict.keys()):
+                id += 1
+                usernameDict[userName] = id
+                parent_id = id
+                trustDict[id] = trustScore
+                socialNetwork.add_node(id, username=userName, trust=trustScore)
+
+            else:
+                parent_id = usernameDict[userName]
+                trustDict[parent_id] += trustScore
+                trustDict[parent_id] = min(50, trustDict[parent_id])
+                socialNetwork.nodes[parent_id]['trust'] = trustDict[parent_id]
+
+            comment.replies.replace_more(0)
+            replyList = comment.replies.list()
+
+            for reply in replyList:
+
+                sentiment = sid.polarity_scores(reply.body)["compound"]
+
+                if (reply.author
+                        and reply.author.name not in usernameDict.keys()):
+                    userName = reply.author.name
+                    id += 1
+                    usernameDict[userName] = id
+                    trustDict[id] = sentiment * trustScore
+                    socialNetwork.add_node(id,
+                                           username=userName,
+                                           trust=sentiment * trustScore)
+                    socialNetwork.add_edge(parent_id,
+                                           id,
+                                           weight=sentiment * trustScore)
+
+                elif (reply.author):
+                    userName = reply.author.name
+                    child_id = usernameDict[userName]
+                    trustDict[child_id] += trustScore * sentiment
+                    trustDict[child_id] = min(50, trustDict[child_id])
+                    socialNetwork.nodes[child_id]['trust'] = trustDict[
+                        child_id]
+                    socialNetwork.add_edge(parent_id,
+                                           child_id,
+                                           weight=sentiment * trustScore)
 
     id = -1
     socialNetwork = numpy.zeros((100, 100))
